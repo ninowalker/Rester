@@ -20,11 +20,11 @@ class TestSuite(object):
         self.variables.update(data.get('globals', {}).get('variables', {}).items())
         for case in data['test_cases']:
             filename = os.path.join(os.path.dirname(self.filename), case)
-            self.test_cases.append(TestCase(self, filename))
+            self.test_cases.append(TestCase(filename, self))
 
 
 class TestCase(object):
-    def __init__(self, suite, filename):
+    def __init__(self, filename, suite=None):
         self.filename = filename
         self.data = None
         self.variables = Variables()

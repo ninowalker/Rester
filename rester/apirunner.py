@@ -1,42 +1,41 @@
+from docopt import docopt
+from rester.loader import load
+from rester.output import display_report
 from testcase import ApiTestCaseRunner
-import argparse
 import logging
 import sys
 
-DEFAULT_TEST_CASE = 'test_case.json'
-
-
-def parse_cmdln_args():
-    parser = argparse.ArgumentParser(description='Process command line args')
-    parser.add_argument('--log', help='log help', default='INFO')
-    parser.add_argument(
-        '--tc', help='tc help')
-    parser.add_argument(
-        '--ts', help='ts help')
-
-    args = parser.parse_args()
-    return (args.log.upper(), args.tc, args.ts)
-
 
 def run():
-    log_level, test_case, test_suite = parse_cmdln_args()
-    print log_level, test_case, test_suite
+    """
+Rester Test Runner.
+
+Usage:
+  apirunner [options]<files>...
+  apirunner -h | --help
+  apirunner --version
+
+Options:
+  -h --help     Show this screen.
+  --log=<level> LOG level [default: INFO].
+    """
+    arguments = docopt(run.__doc__, version='apirunner 1.0')
+    if arguments.get('--help'):
+        print run.__doc__
+        return 0
+    log_level = arguments.get("--log", "INFO").upper()
     logging.basicConfig()
     logger = logging.getLogger('rester')
     logger.setLevel(log_level)
-    test_runner = ApiTestCaseRunner()
-    if test_case is not None:
-        print "test case has been specified"
-        test_runner.run_test_case(test_case)
-    elif test_suite is not None:
-        print "test suite has been specified"
-        test_runner.run_test_suite(test_suite)
-    else:
-        print "running the default test case"
-        test_runner.run_test_case(DEFAULT_TEST_CASE)
-    test_runner.display_report()
+    test_runner = ApiTestCaseRunner(arguments)
+    for f in arguments["<files>"]:
+        o = load(f, open(f))
+        if 'test_cases' in o:
+            test_runner.run_test_suite(f)
+        else:
+            test_runner.run_test_case(f)
+    display_report(test_runner)
     return any((result.get('failed') for result in test_runner.results))
 
 if (__name__ == '__main__'):
     sys.exit(run)
-
