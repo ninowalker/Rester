@@ -6,12 +6,11 @@ import requests
 
 class HttpClient(object):
     logger = getLogger(__name__)
-    ALLOWED_METHODS = ["get", "post", "put", "delete", "patch"]
 
     def __init__(self, **kwargs):
         self.extra_request_opts = kwargs
 
-    def request(self, api_url, method, headers, params, is_raw):
+    def request(self, api_url, method, headers, params, is_raw, data=None):
         self.logger.info(
             '\n Invoking REST Call... api_url: %s, method: %s : ', api_url, method)
 
@@ -20,7 +19,11 @@ class HttpClient(object):
         except AttributeError:
             self.logger.error('undefined HTTP method!!! %s', method)
             raise
-        response = func(api_url, headers=headers, params=params, **self.extra_request_opts)
+
+        kwargs = dict(headers=headers, params=params, **self.extra_request_opts)
+        if data != None:
+            kwargs['data'] = data
+        response = func(api_url, **kwargs)
 
         if is_raw:
             payload = {"__raw__": response.text}

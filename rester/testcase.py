@@ -14,7 +14,7 @@ class ApiTestCaseRunner:
         test_suite = TestSuite(test_suite_file_name)
         test_suite.load()
         for test in test_suite.test_cases:
-            self._run_test_case(test)
+            self._run_case(test)
 
     def run_test_case(self, test_case_file_name):
         case = TestCase(test_case_file_name)

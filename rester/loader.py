@@ -20,7 +20,9 @@ class TestSuite(object):
         self.variables.update(data.get('globals', {}).get('variables', {}).items())
         for case in data['test_cases']:
             filename = os.path.join(os.path.dirname(self.filename), case)
-            self.test_cases.append(TestCase(filename, self))
+            tc = TestCase(filename, self)
+            tc.load()
+            self.test_cases.append(tc)
 
 
 class TestCase(object):

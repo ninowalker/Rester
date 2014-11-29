@@ -84,12 +84,14 @@ class TestCaseExec(object):
             params = self._build_param_dict(test_step)
 
             url = self.case.variables.expand(test_step.apiUrl)
+            data = self.case.variables.expand(test_step.data) if hasattr(test_step, 'data') else None
             self.logger.debug('Evaluated URL : %s', url)
-            response_wrapper = http_client.request(url, method, headers, params, is_raw)
+            self.logger.debug("Data: %s", data)
+            response_wrapper = http_client.request(url, method, headers, params, is_raw, data=data)
 
             expected_status = getattr(getattr(test_step, 'assertMap'), 'status', 200)
             if response_wrapper.status != expected_status:
-                failures.errors.append("status(%s) != expected status(%s)" % (response_wrapper.status_code, expected_status))
+                failures.errors.append("status(%s) != expected status(%s)" % (response_wrapper.status, expected_status))
 
             if hasattr(test_step, "assertMap"):
                 assertMap = test_step.assertMap
