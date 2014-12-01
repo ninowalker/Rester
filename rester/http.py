@@ -2,10 +2,14 @@ from logging import getLogger
 from rester.struct import ResponseWrapper
 import json
 import requests
+import time
 
 
 class HttpClient(object):
     logger = getLogger(__name__)
+
+    # added header with how long the response took.
+    H_ELAPSED = '__elapsed__'
 
     def __init__(self, **kwargs):
         self.extra_request_opts = kwargs
@@ -23,21 +27,26 @@ class HttpClient(object):
         kwargs = dict(headers=headers, params=params, **self.extra_request_opts)
         if data != None:
             kwargs['data'] = data
+        start = time.time()
         response = func(api_url, **kwargs)
+        elapsed = time.time() - start
 
         if is_raw:
             payload = {"__raw__": response.text}
         else:
             payload = response.json()
 
+        rheaders = dict(response.headers)
+        rheaders[self.H_ELAPSED] = elapsed
+
         if response.status_code < 300:
             emit = self.logger.debug
         else:
             emit = self.logger.warn
-        emit('Response Headers: %s', str(response.headers))
+        emit('Response Headers: %s', str(rheaders))
         if is_raw:
             emit('Response:\n%s\n' + response.text)
         else:
             emit('Response:\n%s\n' + json.dumps(payload, sort_keys=True, indent=2))
 
-        return ResponseWrapper(response.status_code, payload, response.headers)
+        return ResponseWrapper(response.status_code, payload, rheaders)
