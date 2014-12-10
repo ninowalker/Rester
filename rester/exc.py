@@ -24,6 +24,8 @@ class TestCaseExec(object):
         # What was this?
         #skip_all_subsequent_tests = False
 
+        http_client = HttpClient(**self.case.request_opts)
+
         for step in self.case.steps:
             self.logger.debug('Test Step Name : %s', step.name)
             if step.get('skip', False):
@@ -33,7 +35,7 @@ class TestCaseExec(object):
 
             @log_capture()
             def _run(l):
-                failures = self._execute_test_step(step)
+                failures = self._execute_test_step(http_client, step)
                 return failures, l
 
             f, logs = _run()
@@ -65,8 +67,7 @@ class TestCaseExec(object):
                 params[key] = self.case.variables.expand(value)
         return params
 
-    def _execute_test_step(self, test_step):
-        http_client = HttpClient(**self.case.request_opts)
+    def _execute_test_step(self, http_client, test_step):
         failures = Failure([], None)
         try:
             method = getattr(test_step, 'method', 'get')
