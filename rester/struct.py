@@ -17,7 +17,7 @@ class DictWrapper(object):
                     setattr(self, key, DictWrapper(value)
                             if isinstance(value, dict) else value)
 
-    def get(self, name, default):
+    def get(self, name, default=None):
         return self.__dict__.get(name, default)
 
     def __getattr__(self, name):
@@ -35,7 +35,7 @@ class DictWrapper(object):
         self.__dict__[key] = DictWrapper(value) if isinstance(value, dict) else value
 
     def items(self):
-        return self.__dict__
+        return self.__dict__.items()
 
 
 class ResponseWrapper(object):

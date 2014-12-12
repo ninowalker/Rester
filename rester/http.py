@@ -35,9 +35,9 @@ class HttpClient(object):
         response = func(api_url, **kwargs)
         elapsed = time.time() - start
 
-        if is_raw or 'application/json' not in response.headers['content-type']:
+        if is_raw == True or (is_raw is None and 'application/json' not in response.headers.get('content-type', '')):
             payload = {"__raw__": response.text}
-        else:    
+        else:
             payload = response.json()
 
         rheaders = dict(response.headers)

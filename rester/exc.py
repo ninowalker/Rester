@@ -3,7 +3,11 @@ from rester.http import HttpClient
 from rester.struct import DictWrapper
 from testfixtures import log_capture
 import collections
+import os
+import random
 import re
+import sys
+import time
 import traceback
 
 
@@ -33,18 +37,42 @@ class TestCaseExec(object):
                 self.skipped.append(step)
                 continue
 
-            @log_capture()
-            def _run(l):
-                failures = self._execute_test_step(http_client, step)
-                return failures, l
+            if step.get('module'):
+                f, logs = self._run_script(step, step.get('module'))
+            else:
+                @log_capture()
+                def _run(l):
+                    failures = self._execute_test_step(http_client, step)
+                    return failures, l
 
-            f, logs = _run()
-            if f:
+                f, logs = _run()
+            if f and f.errors:
                 self.failed.append((step, Failure(f.errors, "".join(self._format_logs(logs)))))
             else:
                 self.passed.append(step)
 
         return self._result()
+
+    def _run_script(self, step, module):
+        @log_capture()
+        def _run(l):
+            failures = Failure([], None)
+            path = os.path.dirname(self.case.filename)
+            if path not in sys.path:
+                sys.path.append(path)
+            try:
+                mod, fname = module.rsplit(":", 1)
+                func = getattr(__import__(mod), fname)
+                self.logger.debug("Running... %s", func)
+                func(step=step, failures=failures, vars=self.case.variables)
+                self.logger.debug("... complete ... %s", func)
+            except:
+                self.logger.exception("Failure running '%s'", module)
+                failures.errors.append(traceback.format_exc())
+            finally:
+                pass
+            return failures, l
+        return _run()
 
     def _result(self):
         d = dict(name=self.case.filename,
@@ -63,7 +91,7 @@ class TestCaseExec(object):
     def _build_param_dict(self, test_step):
         params = {}
         if hasattr(test_step, 'params') and test_step.params is not None:
-            for key, value in test_step.params.items().items():
+            for key, value in test_step.params.items():
                 params[key] = self.case.variables.expand(value)
         return params
 
@@ -71,14 +99,14 @@ class TestCaseExec(object):
         failures = Failure([], None)
         try:
             method = getattr(test_step, 'method', 'get')
-            is_raw = getattr(test_step, 'raw', False)
+            is_raw = getattr(test_step, 'raw', None)
             self.logger.info('\n=======> Executing TestStep : %s, method : %s', test_step.name, method)
 
             # process and set up headers
             headers = {}
             if hasattr(test_step, 'headers') and test_step.headers is not None:
                 self.logger.debug('Found Headers')
-                for key, value in test_step.headers.items().items():
+                for key, value in test_step.headers.items():
                     headers[key] = self.case.variables.expand(value)
 
             # process and set up params
@@ -97,11 +125,11 @@ class TestCaseExec(object):
             if hasattr(test_step, "asserts"):
                 asserts = test_step.asserts
                 if hasattr(asserts, "headers"):
-                    self._assert_element_list('Header', failures, test_step, response_wrapper.headers, test_step.asserts.headers.items().items())
+                    self._assert_element_list('Header', failures, test_step, response_wrapper.headers, test_step.asserts.headers.items())
 
                 if hasattr(asserts, "payload"):
                     self.logger.debug('Evaluating Response Payload')
-                    self._assert_element_list('Payload', failures, test_step, response_wrapper.body, test_step.asserts.payload.items().items())
+                    self._assert_element_list('Payload', failures, test_step, response_wrapper.body, test_step.asserts.payload.items())
             else:
                 self.logger.warn('\n=======> No "asserts" element found in TestStep %s', test_step.name)
 
@@ -113,10 +141,10 @@ class TestCaseExec(object):
 
         if failures.errors:
             return failures
-        
+
         # execute all the assignment statements
-        if hasattr(test_step, 'postAsserts') and test_step.postAsserts is not None:          
-            for key, value in test_step.postAsserts.items().items():
+        if hasattr(test_step, 'postAsserts') and test_step.postAsserts is not None:
+            for key, value in test_step.postAsserts.items():
                 self._process_post_asserts(response_wrapper.body, key, value)
 
         return None
@@ -201,7 +229,8 @@ class TestCaseExec(object):
         self.logger.debug("evaled value: {}".format(getattr(response, value, '')))
         self.case.variables.add_variable(key, getattr(response, value, ''))
 
-def _evaluate(clause, value):
+
+def _evaluate(clause, value): #@UnusedVariable
     assert_expr = 'result = {0}'.format(clause)
     #self.logger.debug('     ---> Assert_exec : ' + assert_expr)
     exec(assert_expr)
