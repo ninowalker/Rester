@@ -20,7 +20,7 @@ class HttpClient(object):
 
     def request(self, api_url, method, headers, params, is_raw, data=None):
         self.logger.info(
-            '\n Invoking REST Call... api_url: %s, method: %s : ', api_url, method)
+            '\n Invoking REST Call... api_url: %s, method: %s, headers %s : ', api_url, method, headers)
 
         try:
             func = self._func(method)
@@ -35,9 +35,9 @@ class HttpClient(object):
         response = func(api_url, **kwargs)
         elapsed = time.time() - start
 
-        if is_raw:
+        if is_raw or 'application/json' not in response.headers['content-type']:
             payload = {"__raw__": response.text}
-        else:
+        else:    
             payload = response.json()
 
         rheaders = dict(response.headers)
