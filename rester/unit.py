@@ -1,9 +1,10 @@
 from docopt import docopt
 from rester.loader import load, TestSuite
 from rester.output import display_report
-from testcase import ApiTestCaseRunner
+from testcase import ResterTestCase
 import logging
 import sys
+import unittest
 
 
 def run():
@@ -28,22 +29,16 @@ Options:
     logging.basicConfig()
     logger = logging.getLogger('rester')
     logger.setLevel(log_level)
-    test_runner = ApiTestCaseRunner(arguments)
 
-    suite = None
-    var_file = arguments.get('--vars')
-    if var_file:
-        suite = TestSuite(var_file)
-        suite.load()
+    suites = []
+    for fname in arguments["<files>"]:
+        cls = ResterTestCase.new(filename=fname)
+        suite = unittest.TestLoader().loadTestsFromTestCase(cls)
+        suites.append(suite)
+    runner = unittest.TextTestRunner()
+    return runner.run(unittest.TestSuite(suites))
 
-    for f in arguments["<files>"]:
-        o = load(f, open(f))
-        if 'test_cases' in o:
-            test_runner.run_test_suite(f)
-        else:
-            test_runner.run_test_case(f, suite)
-    display_report(test_runner)
-    return any((result.get('failed') for result in test_runner.results))
+    #return unittest.TestLoader().loadTestsFromTestCase
 
 if __name__ == '__main__':
     sys.exit(run())

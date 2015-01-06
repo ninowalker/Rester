@@ -1,4 +1,5 @@
 from logging import getLogger
+import random
 import re
 
 
@@ -10,7 +11,7 @@ class Options(object):
 class Variables(object):
     """Container substitution variables"""
     logger = getLogger(__name__)
-    _pattern = re.compile(r'\{(\w+)\}')
+    _pattern = re.compile(r'\{(\$?\w+)\}')
 
     def __init__(self, variables=None):
         self._variables = variables or {}
@@ -19,8 +20,20 @@ class Variables(object):
         for k, v in self._variables.iteritems():
             yield k, v
 
+    def __getitem__(self, key):
+        self._special(key)
+        return self._variables[key]
+
+    def __contains__(self, key):
+        return key in self._variables
+
     def get(self, k, default):
+        self._special(k)
         return self._variables.get(k, default)
+
+    def _special(self, k):
+        if k.startswith("$random") and k not in self:
+            self._variables[k] = random.randint(0, 10000000)
 
     def update(self, values):
         for k, v in values:
@@ -37,7 +50,7 @@ class Variables(object):
         if not is_string(expression):
             return expression
 
-        result = self._pattern.sub(lambda var: str(self._variables[var.group(1)]), expression)
+        result = self._pattern.sub(lambda var: str(self[var.group(1)]), expression)
 
         result = result.strip()
         self.logger.debug('expand : %s - result : %s', expression, result)

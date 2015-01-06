@@ -3,11 +3,18 @@ from rester.http import HttpClient
 from rester.struct import DictWrapper
 from testfixtures import log_capture
 import collections
+import os
+import random
 import re
+import sys
+import time
 import traceback
+import rester.services
+import importlib
 
 
 Failure = collections.namedtuple("Failure", "errors output")
+Context = collections.namedtuple("Context", "case step failures")
 
 
 class TestCaseExec(object):
@@ -19,11 +26,29 @@ class TestCaseExec(object):
         self.passed = []
         self.failed = []
         self.skipped = []
+        self.services = []
 
     def __call__(self):
         # What was this?
         #skip_all_subsequent_tests = False
+        try:
+            self.setUp()
+            return self.run()
+        finally:
+            self.tearDown()
 
+    def setUp(self):
+        for svc in getattr(self.case, 'services', []):
+            name, config = svc.items()[0]
+            mod = importlib.import_module("." + name, 'rester.services')
+            self.services.append(mod.run(self.case, **dict(config.items())))
+
+    def tearDown(self):
+        for stop in self.services:
+            stop()
+
+    def run(self):
+        http_client = HttpClient(**self.case.request_opts)
         for step in self.case.steps:
             self.logger.debug('Test Step Name : %s', step.name)
             if step.get('skip', False):
@@ -31,18 +56,44 @@ class TestCaseExec(object):
                 self.skipped.append(step)
                 continue
 
-            @log_capture()
-            def _run(l):
-                failures = self._execute_test_step(step)
-                return failures, l
+            if step.get('module'):
+                f, logs = self._run_script(self.case, step, step.get('module'))
+            else:
+                @log_capture()
+                def _run(l):
+                    failures = self._execute_test_step(http_client, step)
+                    return failures, l
 
-            f, logs = _run()
-            if f:
+                f, logs = _run()
+            if f and f.errors:
                 self.failed.append((step, Failure(f.errors, "".join(self._format_logs(logs)))))
             else:
                 self.passed.append(step)
 
         return self._result()
+
+    def _run_script(self, case, step, module):
+        @log_capture()
+        def _run(l):
+            failures = Failure([], None)
+            path = os.path.dirname(self.case.filename)
+            if path not in sys.path:
+                sys.path.append(path)
+            try:
+                mod, fname = module.rsplit(":", 1)
+                mod_ = importlib.import_module(mod)
+                func = getattr(mod_, fname)
+                self.logger.debug("Running... %s", func)
+                context = Context(case=case, step=step, failures=failures)
+                func(context)
+                self.logger.debug("... complete ... %s", func)
+            except:
+                self.logger.exception("Failure running '%s'", module)
+                failures.errors.append(traceback.format_exc())
+            finally:
+                pass
+            return failures, l
+        return _run()
 
     def _result(self):
         d = dict(name=self.case.filename,
@@ -61,31 +112,32 @@ class TestCaseExec(object):
     def _build_param_dict(self, test_step):
         params = {}
         if hasattr(test_step, 'params') and test_step.params is not None:
-            for key, value in test_step.params.items().items():
+            for key, value in test_step.params.items():
                 params[key] = self.case.variables.expand(value)
         return params
 
-    def _execute_test_step(self, test_step):
-        http_client = HttpClient(**self.case.request_opts)
+    def _execute_test_step(self, http_client, test_step):
         failures = Failure([], None)
         try:
             method = getattr(test_step, 'method', 'get')
-            is_raw = getattr(test_step, 'raw', False)
+            is_raw = getattr(test_step, 'raw', None)
             self.logger.info('\n=======> Executing TestStep : %s, method : %s', test_step.name, method)
 
             # process and set up headers
             headers = {}
             if hasattr(test_step, 'headers') and test_step.headers is not None:
                 self.logger.debug('Found Headers')
-                for key, value in test_step.headers.items().items():
+                for key, value in test_step.headers.items():
                     headers[key] = self.case.variables.expand(value)
 
             # process and set up params
             params = self._build_param_dict(test_step)
 
             url = self.case.variables.expand(test_step.apiUrl)
+            data = self.case.variables.expand(test_step.data) if hasattr(test_step, 'data') else None
             self.logger.debug('Evaluated URL : %s', url)
-            response_wrapper = http_client.request(url, method, headers, params, is_raw)
+            self.logger.debug("Data: %s", data)
+            response_wrapper = http_client.request(url, method, headers, params, is_raw, data=data)
 
             # expected_status = getattr(getattr(test_step, 'asserts'), 'status', 200)
             # if response_wrapper.status != expected_status:
@@ -94,11 +146,11 @@ class TestCaseExec(object):
             if hasattr(test_step, "asserts"):
                 asserts = test_step.asserts
                 if hasattr(asserts, "headers"):
-                    self._assert_element_list('Header', failures, test_step, response_wrapper.headers, test_step.asserts.headers.items().items())
+                    self._assert_element_list('Header', failures, test_step, response_wrapper.headers, test_step.asserts.headers.items())
 
                 if hasattr(asserts, "payload"):
                     self.logger.debug('Evaluating Response Payload')
-                    self._assert_element_list('Payload', failures, test_step, response_wrapper.body, test_step.asserts.payload.items().items())
+                    self._assert_element_list('Payload', failures, test_step, response_wrapper.body, test_step.asserts.payload.items())
             else:
                 self.logger.warn('\n=======> No "asserts" element found in TestStep %s', test_step.name)
 
@@ -110,10 +162,10 @@ class TestCaseExec(object):
 
         if failures.errors:
             return failures
-        
+
         # execute all the assignment statements
-        if hasattr(test_step, 'postAsserts') and test_step.postAsserts is not None:          
-            for key, value in test_step.postAsserts.items().items():
+        if hasattr(test_step, 'postAsserts') and test_step.postAsserts is not None:
+            for key, value in test_step.postAsserts.items():
                 self._process_post_asserts(response_wrapper.body, key, value)
 
         return None
@@ -181,7 +233,6 @@ class TestCaseExec(object):
             else:
                 assert_expr = 'exec_result = {0}'.format(value)
                 assert_literal_expr = '"f({0}) <- {1}"'.format(json_eval_expr, value)
-                exec(assert_expr)
                 assert_result = _evaluate(value, json_eval_expr)
 
             self.logger.debug('assert evaluation result  : %s', assert_result)
@@ -198,7 +249,8 @@ class TestCaseExec(object):
         self.logger.debug("evaled value: {}".format(getattr(response, value, '')))
         self.case.variables.add_variable(key, getattr(response, value, ''))
 
-def _evaluate(clause, value):
+
+def _evaluate(clause, value): #@UnusedVariable
     assert_expr = 'result = {0}'.format(clause)
     #self.logger.debug('     ---> Assert_exec : ' + assert_expr)
     exec(assert_expr)

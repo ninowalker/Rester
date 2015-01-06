@@ -20,11 +20,13 @@ class TestSuite(object):
         self.variables.update(data.get('globals', {}).get('variables', {}).items())
         for case in data['test_cases']:
             filename = os.path.join(os.path.dirname(self.filename), case)
-            self.test_cases.append(TestCase(self, filename))
+            tc = TestCase(filename, self)
+            tc.load()
+            self.test_cases.append(tc)
 
 
 class TestCase(object):
-    def __init__(self, suite, filename):
+    def __init__(self, filename, suite=None):
         self.filename = filename
         self.data = None
         self.variables = Variables()
@@ -33,6 +35,10 @@ class TestCase(object):
 
     def __getattr__(self, key):
         return getattr(self.data, key)
+
+    @property
+    def root(self):
+        return os.path.dirname(os.path.abspath(self.filename))
 
     @property
     def steps(self):

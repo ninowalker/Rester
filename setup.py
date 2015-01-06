@@ -7,11 +7,13 @@ setup(name='Rester',
     url='https://github.com/chitamoor/rester',
     license='LICENSE.txt',
     packages=['rester'],
+    package_data={'': ['README.md']},
     entry_points={
-        'console_scripts':['apirunner = rester.apirunner:run']
+        'console_scripts': ['apirunner = rester.apirunner:run',
+                            'resterunit = rester.unit:run']
     },
     test_suite="test",
     description='Rest API Testing',
     long_description=open('README.md').read(),
-    install_requires=["requests", "PyYAML>=3.9"],
+    install_requires=["requests", "PyYAML>=3.9", "docopt", "testfixtures"],
 )
