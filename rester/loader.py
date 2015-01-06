@@ -37,6 +37,10 @@ class TestCase(object):
         return getattr(self.data, key)
 
     @property
+    def root(self):
+        return os.path.dirname(os.path.abspath(self.filename))
+
+    @property
     def steps(self):
         return self.data.testSteps
 

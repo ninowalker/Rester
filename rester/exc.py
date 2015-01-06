@@ -9,9 +9,12 @@ import re
 import sys
 import time
 import traceback
+import rester.services
+import importlib
 
 
 Failure = collections.namedtuple("Failure", "errors output")
+Context = collections.namedtuple("Context", "case step failures")
 
 
 class TestCaseExec(object):
@@ -23,13 +26,29 @@ class TestCaseExec(object):
         self.passed = []
         self.failed = []
         self.skipped = []
+        self.services = []
 
     def __call__(self):
         # What was this?
         #skip_all_subsequent_tests = False
+        try:
+            self.setUp()
+            return self.run()
+        finally:
+            self.tearDown()
 
+    def setUp(self):
+        for svc in getattr(self.case, 'services', []):
+            name, config = svc.items()[0]
+            mod = importlib.import_module("." + name, 'rester.services')
+            self.services.append(mod.run(self.case, **dict(config.items())))
+
+    def tearDown(self):
+        for stop in self.services:
+            stop()
+
+    def run(self):
         http_client = HttpClient(**self.case.request_opts)
-
         for step in self.case.steps:
             self.logger.debug('Test Step Name : %s', step.name)
             if step.get('skip', False):
@@ -38,7 +57,7 @@ class TestCaseExec(object):
                 continue
 
             if step.get('module'):
-                f, logs = self._run_script(step, step.get('module'))
+                f, logs = self._run_script(self.case, step, step.get('module'))
             else:
                 @log_capture()
                 def _run(l):
@@ -53,7 +72,7 @@ class TestCaseExec(object):
 
         return self._result()
 
-    def _run_script(self, step, module):
+    def _run_script(self, case, step, module):
         @log_capture()
         def _run(l):
             failures = Failure([], None)
@@ -62,9 +81,11 @@ class TestCaseExec(object):
                 sys.path.append(path)
             try:
                 mod, fname = module.rsplit(":", 1)
-                func = getattr(__import__(mod), fname)
+                mod_ = importlib.import_module(mod)
+                func = getattr(mod_, fname)
                 self.logger.debug("Running... %s", func)
-                func(step=step, failures=failures, vars=self.case.variables)
+                context = Context(case=case, step=step, failures=failures)
+                func(context)
                 self.logger.debug("... complete ... %s", func)
             except:
                 self.logger.exception("Failure running '%s'", module)
@@ -212,7 +233,6 @@ class TestCaseExec(object):
             else:
                 assert_expr = 'exec_result = {0}'.format(value)
                 assert_literal_expr = '"f({0}) <- {1}"'.format(json_eval_expr, value)
-                exec(assert_expr)
                 assert_result = _evaluate(value, json_eval_expr)
 
             self.logger.debug('assert evaluation result  : %s', assert_result)

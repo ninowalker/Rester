@@ -9,7 +9,8 @@ setup(name='Rester',
     packages=['rester'],
     package_data={'': ['README.md']},
     entry_points={
-        'console_scripts':['apirunner = rester.apirunner:run']
+        'console_scripts': ['apirunner = rester.apirunner:run',
+                            'resterunit = rester.unit:run']
     },
     test_suite="test",
     description='Rest API Testing',

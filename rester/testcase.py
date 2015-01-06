@@ -1,11 +1,13 @@
 from logging import getLogger
 from rester.exc import TestCaseExec
 from rester.loader import TestSuite, TestCase
+import unittest
+
+
+LOG = getLogger(__name__)
 
 
 class ApiTestCaseRunner:
-    logger = getLogger(__name__)
-
     def __init__(self, options={}):
         self.options = options
         self.results = []
@@ -26,6 +28,35 @@ class ApiTestCaseRunner:
         self.results.append(tc())
 
 
-#TODO
-# Support enums
-# post processing
+#class ResterTestSuite(unittest.TestSuite):
+#    @classmethod
+#    def load_tests(cls, filename):
+#        suite = TestSuite(filename)
+#        suite.load()
+#        for test in suite.test_cases:
+#            self.addTest(ResterTestCase(test))
+
+class ResterTestCase(unittest.TestCase):
+    filename = None
+    case = None
+    suite = None
+    _GEN = 0
+
+    @classmethod
+    def new(cls, filename=None, case=None, suite=None, options={}):
+        cls._GEN += 1
+        test = type('ResterTestCase_%s' % cls._GEN, (ResterTestCase,),
+                    dict(filename=filename, case=case, suite=suite, options=options))
+        return test
+
+    @classmethod
+    def setUpClass(cls):
+        if cls.filename:
+            LOG.info("Loading %s", cls.filename)
+            cls.case = TestCase(cls.filename, cls.suite)
+        cls.case.load()
+
+    def test_steps(self):
+        tc = TestCaseExec(self.case, self.options)
+        tc()
+
