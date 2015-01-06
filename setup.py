@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='Rester',
     version='1.0.1',
@@ -6,7 +6,7 @@ setup(name='Rester',
     author_email='rajeev@chitamoor.com',
     url='https://github.com/chitamoor/rester',
     license='LICENSE.txt',
-    packages=['rester'],
+    packages=find_packages(),
     package_data={'': ['README.md']},
     entry_points={
         'console_scripts': ['apirunner = rester.apirunner:run',
